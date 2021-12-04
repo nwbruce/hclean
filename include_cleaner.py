@@ -20,8 +20,9 @@ def write_file(cppfile, lines, exclude_list):
             if not i in exclude_list:
                 fd.write(l)
 
-def compile(cmd):
-    rc = subprocess.call(cmd,
+def compile(cmd, cppfile):
+    rc = subprocess.call(
+        cmd + " '" + cppfile + "'",
         shell=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL)
@@ -29,10 +30,9 @@ def compile(cmd):
 
 def write_and_compile(cmd, cppfile, lines, exclude_index):
     write_file(cppfile, lines, [exclude_index])
-    return compile(cmd)
+    return compile(cmd, cppfile)
     
-
-def do_clean(cppfile, cmd):
+def do_clean(cmd, cppfile):
     with open(cppfile, 'r') as fd:
         lines = fd.readlines()
 
@@ -44,9 +44,9 @@ def do_clean(cppfile, cmd):
     removable_locs = []
     header_locations = find_headers(lines)
     for loc in header_locations:
-        print('without:', lines[loc].rstrip())
+        print('checking:', lines[loc].rstrip())
         rc = write_and_compile(cmd, cppfile, lines, loc)
-        if rc != 0:
+        if rc == 0:
             removable_locs.append(loc)
 
     write_file(cppfile, lines, removable_locs)
@@ -54,10 +54,10 @@ def do_clean(cppfile, cmd):
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('cppfile', help='C++ file to clean')
     parser.add_argument('cmd', help='exact compilation command')
+    parser.add_argument('cppfile', help='C++ file to clean')
     args = parser.parse_args()
-    do_clean(args.cppfile, args.cmd)
+    do_clean(args.cmd, args.cppfile)
 
 if __name__ == "__main__":
     main()
