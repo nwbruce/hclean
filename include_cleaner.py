@@ -22,17 +22,15 @@ def write_file(cppfile, lines, exclude_list):
                 fd.write(l)
 
 def compile(cppfile):
-    subprocess.check_call(['g++', '-c', cppfile])
+    cmd = ['g++', '-c', cppfile]
+    rc = subprocess.call(cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.STDOUT)
+    return rc == 0
 
 def try_compile(cppfile, lines, exclude_index):
-    if exclude_index is not None:
-        print('trying without', lines[exclude_index].rstrip())
     write_file(cppfile, lines, [exclude_index])
-    try:
-        compile(cppfile)
-        return True
-    except:
-        return False
+    return compile(cppfile)
     
 
 def do_clean(cppfile):
@@ -48,6 +46,7 @@ def do_clean(cppfile):
     removable_locs = []
     header_locations = find_headers(lines)
     for loc in header_locations:
+        print('without:', lines[loc].rstrip())
         works = try_compile(cppfile, lines, loc)
         if works:
             removable_locs.append(loc)
