@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from shutil import copy2
 import re
 import subprocess
 
@@ -21,24 +20,23 @@ def write_file(cppfile, lines, exclude_list):
             if not i in exclude_list:
                 fd.write(l)
 
-def compile(cppfile):
-    cmd = ['g++', '-c', cppfile]
+def compile(cmd):
     rc = subprocess.call(cmd,
+        shell=True,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.STDOUT)
+        stderr=subprocess.DEVNULL)
     return rc == 0
 
-def try_compile(cppfile, lines, exclude_index):
+def try_compile(cmd, cppfile, lines, exclude_index):
     write_file(cppfile, lines, [exclude_index])
-    return compile(cppfile)
+    return compile(cmd)
     
 
-def do_clean(cppfile):
-    copy2(cppfile, cppfile + '.bak')
+def do_clean(cppfile, cmd):
     with open(cppfile, 'r') as fd:
         lines = fd.readlines()
 
-    works = try_compile(cppfile, lines, None)
+    works = try_compile(cmd, cppfile, lines, None)
     if not works:
         print('Failed to do basic compile')
         exit(1)
@@ -47,7 +45,7 @@ def do_clean(cppfile):
     header_locations = find_headers(lines)
     for loc in header_locations:
         print('without:', lines[loc].rstrip())
-        works = try_compile(cppfile, lines, loc)
+        works = try_compile(cmd, cppfile, lines, loc)
         if works:
             removable_locs.append(loc)
 
@@ -57,8 +55,9 @@ def do_clean(cppfile):
 def main():
     parser = ArgumentParser()
     parser.add_argument('cppfile', help='C++ file to clean')
+    parser.add_argument('cmd', help='exact compilation command')
     args = parser.parse_args()
-    do_clean(args.cppfile)
+    do_clean(args.cppfile, args.cmd)
 
 if __name__ == "__main__":
     main()
