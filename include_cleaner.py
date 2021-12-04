@@ -15,19 +15,19 @@ def find_headers(lines):
     return header_locations
 
 
-def write_file(cppfile, lines, exclude_index):
+def write_file(cppfile, lines, exclude_list):
     with open(cppfile, 'w') as fd:
         for i, l in enumerate(lines):
-            if i == exclude_index:
-                fd.write('\n')
-            else:
+            if not i in exclude_list:
                 fd.write(l)
 
 def compile(cppfile):
-    subprocess.call(['g++', '-c', cppfile])
+    subprocess.check_call(['g++', '-c', cppfile])
 
 def try_compile(cppfile, lines, exclude_index):
-    write_file(cppfile, lines, exclude_index)
+    if exclude_index is not None:
+        print('trying without', lines[exclude_index].rstrip())
+    write_file(cppfile, lines, [exclude_index])
     try:
         compile(cppfile)
         return True
@@ -52,6 +52,7 @@ def do_clean(cppfile):
         if works:
             removable_locs.append(loc)
 
+    write_file(cppfile, lines, removable_locs)
 
 
 def main():
