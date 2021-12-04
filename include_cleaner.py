@@ -25,9 +25,9 @@ def compile(cmd):
         shell=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL)
-    return rc == 0
+    return rc
 
-def try_compile(cmd, cppfile, lines, exclude_index):
+def write_and_compile(cmd, cppfile, lines, exclude_index):
     write_file(cppfile, lines, [exclude_index])
     return compile(cmd)
     
@@ -36,8 +36,8 @@ def do_clean(cppfile, cmd):
     with open(cppfile, 'r') as fd:
         lines = fd.readlines()
 
-    works = try_compile(cmd, cppfile, lines, None)
-    if not works:
+    rc = write_and_compile(cmd, cppfile, lines, None)
+    if rc != 0:
         print('Failed to do basic compile')
         exit(1)
 
@@ -45,8 +45,8 @@ def do_clean(cppfile, cmd):
     header_locations = find_headers(lines)
     for loc in header_locations:
         print('without:', lines[loc].rstrip())
-        works = try_compile(cmd, cppfile, lines, loc)
-        if works:
+        rc = write_and_compile(cmd, cppfile, lines, loc)
+        if rc != 0:
             removable_locs.append(loc)
 
     write_file(cppfile, lines, removable_locs)
