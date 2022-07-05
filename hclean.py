@@ -109,28 +109,7 @@ async def main():
         print('ERROR:', e)
         exit(1)
 
-def topological_sort(graph):
-    visited = set()
-    result = []
-    for vertex in graph:
-        topo_visit(graph, vertex, visited, result)
-    return reversed(result)
-
-def topo_visit(graph: dict, vertex: str, visited: set, result: list):
-    if vertex in visited:
-        return
-    visited.add(vertex)
-    for inc in topo_iter_incoming(graph, vertex):
-        topo_visit(graph, inc, visited, result)
-    if graph[vertex].modifiable:
-        result.append(vertex)
-
-def topo_iter_incoming(graph: dict, vertex: str):
-    for f in graph:
-        for inc in graph[f].includes:
-            if inc.fullpath == vertex:
-                yield f
-
+#### build file graph ####
 
 async def build_file_graph(inc_dirs, seed_cpp, num_jobs):
     to_scan = set(seed_cpp)
@@ -197,6 +176,36 @@ async def scan_for_includes(cppfiles: list, inc_dirs: IncludeDirs, jobs: int):
     return flatten_list_of_dicts(worker_results)
 
 
+
+#### topological sort ####
+
+def topological_sort(graph):
+    visited = set()
+    result = []
+    for vertex in graph:
+        topo_visit(graph, vertex, visited, result)
+    return reversed(result)
+
+def topo_visit(graph: dict, vertex: str, visited: set, result: list):
+    if vertex in visited:
+        return
+    visited.add(vertex)
+    for inc in topo_iter_incoming(graph, vertex):
+        topo_visit(graph, inc, visited, result)
+    if graph[vertex].modifiable:
+        result.append(vertex)
+
+def topo_iter_incoming(graph: dict, vertex: str):
+    for f in graph:
+        for inc in graph[f].includes:
+            if inc.fullpath == vertex:
+                yield f
+
+
+
+
+
+#### main ####
 
 if __name__ == "__main__":
     asyncio.run(main())
