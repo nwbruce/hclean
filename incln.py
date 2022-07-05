@@ -24,7 +24,7 @@ class IncludeDirs:
             for dir in dirtype:
                 full = os.path.join(dir, target)
                 if os.path.exists(full):
-                    return (i>0, full)
+                    return (i>0, os.path.abspath(full))
         raise Exception(f'Failed to locate header [{target}] in provided include directories')
 
     def shorten(self, fullpath: str):
@@ -55,7 +55,7 @@ class IncludeRef:
     def __repr__(self):
         lstyle = '"' if self.is_local else '<'
         rstyle = '"' if self.is_local else '>'
-        return f'L#{self.lineno}{lstyle}{self.target}{rstyle}->{self.fullpath}'
+        return f'L#{self.lineno} {lstyle}{self.target}{rstyle}->{self.fullpath} Sys={self.is_sys}'
 
 
 class HCFile:
@@ -94,15 +94,22 @@ async def main():
 
     inc_dirs = IncludeDirs(args.I, args.isystem)
 
-    to_scan = set([os.path.abspath(f) for f in args.cppfile])
-    scanned = set()
+    to_scan = set(args.cppfile)
+    results = {}
     while len(to_scan):
-        results = await scan_for_includes(to_scan, inc_dirs, args.jobs)
-        print(results)
+        local_results = await scan_for_includes(to_scan, inc_dirs, args.jobs)
+        results.update(local_results)
 
-
-        scanned.update(to_scan)
         to_scan = set()
+        for _, hcfile in local_results.items():
+            for inc in hcfile.includes:
+                if not inc.fullpath in results:
+                    if inc.is_sys:
+                        hcf = HCFile()
+                        hcf.full_path = inc.fullpath
+                        results[inc.fullpath] = hcf
+                    else:
+                        to_scan.add(inc.fullpath)
 
 
 def flatten_list_of_dicts(lod: list):
@@ -119,6 +126,7 @@ async def scan_for_includes(cppfiles: list, inc_dirs: IncludeDirs, jobs: int):
             results = {}
             while not q.empty():
                 fpath = await q.get()
+                fpath = os.path.abspath(fpath)
                 result = HCFile()
                 result.full_path = fpath
                 result.modifiable = True
