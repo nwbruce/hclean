@@ -84,18 +84,22 @@ class HCFile:
 async def main():
     parser = argparse.ArgumentParser(description="Cleanup unused includes", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-j', '--jobs', default=multiprocessing.cpu_count(), type=int, help='Max number of parallel jobs to run')
-    parser.add_argument('-I', action='append', help='Additional include directory')
-    parser.add_argument('-isystem', action='append', help='Additional system include directory')
+    parser.add_argument('-I', action='append', default=[], help='Additional include directory')
+    parser.add_argument('-isystem', action='append', default=[], help='Additional system include directory')
     parser.add_argument('cppfile', nargs='+', help='C++ files to modify')
     args = parser.parse_args()
 
     logging.basicConfig(filename='./log.txt', level=logging.DEBUG)
     LOGGER.info('Invoked with arguments: %s', str(args))
 
-    inc_dirs = IncludeDirs(args.I, args.isystem)
+    try:
+        inc_dirs = IncludeDirs(args.I, args.isystem)
 
-    # get global list of all the relevant files
-    graph = await build_file_graph(inc_dirs, args.cppfile, args.jobs)
+        # get global list of all the relevant files
+        graph = await build_file_graph(inc_dirs, args.cppfile, args.jobs)
+    except Exception as e:
+        LOGGER.exception(e)
+        exit(1)
 
 
 async def build_file_graph(inc_dirs, seed_cpp, num_jobs):
@@ -151,7 +155,7 @@ async def scan_for_includes(cppfiles: list, inc_dirs: IncludeDirs, jobs: int):
             return results
         except Exception as e:
             LOGGER.exception(e)
-            raise
+            exit(1)
     ### end worker
     q = asyncio.Queue()
     for file in cppfiles:
