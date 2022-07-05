@@ -97,11 +97,13 @@ async def main():
     try:
         inc_dirs = IncludeDirs(args.I, args.isystem)
 
-        # get global list of all the relevant files
-        LOGGER.info('Starting build of initial graph')
+        LOGGER.info('Scanning files to build include graph')
         graph = await build_file_graph(inc_dirs, args.cppfile, args.jobs)
+
+        LOGGER.info('Determining visitation order')
         ordered_file_list = topological_sort(graph)
         LOGGER.info('Visitation order: %s', str([f for f in ordered_file_list]))
+
     except Exception as e:
         LOGGER.exception(e)
         print('ERROR:', e)
@@ -110,7 +112,6 @@ async def main():
 def topological_sort(graph):
     visited = set()
     result = []
-
     for vertex in graph:
         topo_visit(graph, vertex, visited, result)
     return reversed(result)
@@ -119,10 +120,8 @@ def topo_visit(graph: dict, vertex: str, visited: set, result: list):
     if vertex in visited:
         return
     visited.add(vertex)
-
     for inc in topo_iter_incoming(graph, vertex):
         topo_visit(graph, inc, visited, result)
-
     if graph[vertex].modifiable:
         result.append(vertex)
 
