@@ -3,7 +3,7 @@ build:
 #	$(eval TEMPF:=$(shell /usr/bin/mktemp).cpp)
 #	cp testfile.cpp $(TEMPF)
 	rm -f log.txt
-	./incln.py -j 2 \
+	./hclean.py -j 2 \
 		-I . \
 		-isystem /Library/Developer/CommandLineTools/usr/lib/clang/13.0.0/include \
  		-isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include \
