@@ -38,7 +38,7 @@ class IncludeDirs:
 class IncludeRef:
     lineno = 0
     raw = ''
-    is_local = False
+    is_quotes = False
     target = ''
     is_sys = False
     fullpath = ''
@@ -49,13 +49,13 @@ class IncludeRef:
         m = INCLUDE_RE.match(raw)
         if m:
             self.target = m.group(2)
-            self.is_local = m.group(1) == '"'
+            self.is_quotes = m.group(1) == '"'
             self.is_sys, self.fullpath = inc_dirs.locate(self.target)
     
     def __repr__(self):
-        lstyle = '"' if self.is_local else '<'
-        rstyle = '"' if self.is_local else '>'
-        return f'L#{self.lineno} {lstyle}{self.target}{rstyle}->{self.fullpath} Sys={self.is_sys}'
+        lstyle = '"' if self.is_quotes else '<'
+        rstyle = '"' if self.is_quotes else '>'
+        return f'L#{self.lineno} {lstyle}{self.target}{rstyle} -> {self.fullpath} Sys={self.is_sys}'
 
 
 class HCFile:
@@ -94,22 +94,32 @@ async def main():
 
     inc_dirs = IncludeDirs(args.I, args.isystem)
 
-    to_scan = set(args.cppfile)
-    results = {}
-    while len(to_scan):
-        local_results = await scan_for_includes(to_scan, inc_dirs, args.jobs)
-        results.update(local_results)
+    # get global list of all the relevant files
+    graph = await build_file_graph(inc_dirs, args.cppfile, args.jobs)
 
-        to_scan = set()
-        for _, hcfile in local_results.items():
-            for inc in hcfile.includes:
-                if not inc.fullpath in results:
-                    if inc.is_sys:
-                        hcf = HCFile()
-                        hcf.full_path = inc.fullpath
-                        results[inc.fullpath] = hcf
-                    else:
-                        to_scan.add(inc.fullpath)
+
+async def build_file_graph(inc_dirs, seed_cpp, num_jobs):
+    to_scan = set(seed_cpp)
+    graph = {}
+    while len(to_scan):
+        local_results = await scan_for_includes(to_scan, inc_dirs, num_jobs)
+        graph.update(local_results)
+        to_scan = update_results(graph, local_results)
+    return graph
+
+
+def update_results(results: dict, local_results: dict):
+    to_scan = set()
+    for _, hcfile in local_results.items():
+        for inc in hcfile.includes:
+            if not inc.fullpath in results:
+                if inc.is_sys:
+                    hcf = HCFile()
+                    hcf.full_path = inc.fullpath
+                    results[inc.fullpath] = hcf
+                else:
+                    to_scan.add(inc.fullpath)
+    return to_scan
 
 
 def flatten_list_of_dicts(lod: list):
