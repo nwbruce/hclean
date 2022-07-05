@@ -25,7 +25,7 @@ class IncludeDirs:
                 full = os.path.join(dir, target)
                 if os.path.exists(full):
                     return (i>0, os.path.abspath(full))
-        raise Exception(f'Failed to locate header [{target}] in provided include directories')
+        raise Exception(f'Failed to locate header <{target}> in provided include directories')
 
     def shorten(self, fullpath: str):
         for dirtype in self.dirs:
@@ -59,13 +59,13 @@ class IncludeRef:
 
 
 class HCFile:
-    full_path = ''
+    fullpath = ''
     includes = []
     modifiable = False
     removed_includes = []
 
     def __repr__(self):
-        return 'F=' + self.full_path + \
+        return 'F=' + self.fullpath + \
             ' I=' + str(self.includes) + \
             ' M=' + str(self.modifiable) + \
             ' R=' + str(self.removed_includes)
@@ -76,6 +76,7 @@ class HCFile:
 - scan all headers in -I directories and all cpp's listed and create a graph of includes (with full file paths based on -I). note which headers can be modified (e.g. not std lib)
 - topological sort
 - for each file, starting with top level header in topological order
+    - do a test compile
     - for each include in this file, add all the lines in file.h.rem for that include here. shorten the path based on -I
     - remove each include and try to compile each time
     - store successfully removed files in file.h.rem
@@ -83,23 +84,53 @@ class HCFile:
 
 async def main():
     parser = argparse.ArgumentParser(description="Cleanup unused includes", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--log', default="./log.txt", help='Path to write log file')
     parser.add_argument('-j', '--jobs', default=multiprocessing.cpu_count(), type=int, help='Max number of parallel jobs to run')
     parser.add_argument('-I', action='append', default=[], help='Additional include directory')
     parser.add_argument('-isystem', action='append', default=[], help='Additional system include directory')
     parser.add_argument('cppfile', nargs='+', help='C++ files to modify')
     args = parser.parse_args()
 
-    logging.basicConfig(filename='./log.txt', level=logging.DEBUG)
-    LOGGER.info('Invoked with arguments: %s', str(args))
+    logging.basicConfig(filename=args.log, level=logging.DEBUG)
+    LOGGER.info('dir=%s args=%s', os.getcwd(), str(args))
 
     try:
         inc_dirs = IncludeDirs(args.I, args.isystem)
 
         # get global list of all the relevant files
+        LOGGER.info('Starting build of initial graph')
         graph = await build_file_graph(inc_dirs, args.cppfile, args.jobs)
+        ordered_file_list = topological_sort(graph)
+        LOGGER.info('Visitation order: %s', str([f for f in ordered_file_list]))
     except Exception as e:
         LOGGER.exception(e)
+        print('ERROR:', e)
         exit(1)
+
+def topological_sort(graph):
+    visited = set()
+    result = []
+
+    for vertex in graph:
+        topo_visit(graph, vertex, visited, result)
+    return reversed(result)
+
+def topo_visit(graph: dict, vertex: str, visited: set, result: list):
+    if vertex in visited:
+        return
+    visited.add(vertex)
+
+    for inc in topo_iter_incoming(graph, vertex):
+        topo_visit(graph, inc, visited, result)
+
+    if graph[vertex].modifiable:
+        result.append(vertex)
+
+def topo_iter_incoming(graph: dict, vertex: str):
+    for f in graph:
+        for inc in graph[f].includes:
+            if inc.fullpath == vertex:
+                yield f
 
 
 async def build_file_graph(inc_dirs, seed_cpp, num_jobs):
@@ -119,7 +150,7 @@ def update_results(results: dict, local_results: dict):
             if not inc.fullpath in results:
                 if inc.is_sys:
                     hcf = HCFile()
-                    hcf.full_path = inc.fullpath
+                    hcf.fullpath = inc.fullpath
                     results[inc.fullpath] = hcf
                 else:
                     to_scan.add(inc.fullpath)
@@ -142,19 +173,21 @@ async def scan_for_includes(cppfiles: list, inc_dirs: IncludeDirs, jobs: int):
                 fpath = await q.get()
                 fpath = os.path.abspath(fpath)
                 result = HCFile()
-                result.full_path = fpath
+                result.fullpath = fpath
                 result.modifiable = True
+                LOGGER.debug(f'Scanning {fpath}')
                 with open(fpath, 'r') as fd:
                     for i, line in enumerate(fd):
                         if line.startswith('#include'):
                             incref = IncludeRef(i+1, line, inc_dirs)
                             LOGGER.debug(f'Include found in {fpath}: {incref}')
                             result.includes.append(incref)
-                LOGGER.info(f'Found {len(result.includes)} includes in {fpath}')
+                LOGGER.info(f'Found {len(result.includes)} include(s) in {fpath}')
                 results[fpath] = result
             return results
         except Exception as e:
             LOGGER.exception(e)
+            print('ERROR:', e)
             exit(1)
     ### end worker
     q = asyncio.Queue()

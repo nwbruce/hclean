@@ -1,7 +1,5 @@
 
 build:
-#	$(eval TEMPF:=$(shell /usr/bin/mktemp).cpp)
-#	cp testfile.cpp $(TEMPF)
 	rm -f log.txt
 	./hclean.py -j 2 \
 		-I . \
@@ -14,6 +12,8 @@ build:
 
 
 
+#	$(eval TEMPF:=$(shell /usr/bin/mktemp).cpp)
+#	cp testfile.cpp $(TEMPF)
 
 
 # "g++ -c" $(TEMPF) 
