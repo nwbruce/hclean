@@ -10,8 +10,11 @@ build:
 		-isystem /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1 \
 		test/*.cpp
 
-compile:
-	g++ -c -I test/ -o /dev/null test/collector.cpp
+CC=g++ -c -x c++-header -I test/ -o /dev/null
+cc:
+	$(CC) test/collector.h
+	$(CC) test/collector_util.h
+	$(CC) test/collector.cpp
 
 #	$(eval TEMPF:=$(shell /usr/bin/mktemp).cpp)
 #	cp testfile.cpp $(TEMPF)

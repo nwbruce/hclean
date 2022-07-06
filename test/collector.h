@@ -2,6 +2,7 @@
 #define COLLECTOR_H_
 
 #include <list>
+#include <climits>
 
 struct Collector {
   Collector();
@@ -11,6 +12,7 @@ struct Collector {
 
   double sum() const;
   double avg() const;
+  bool empty() const;
  private:
   std::list<double> _values;
   double _sum;

@@ -1,7 +1,0 @@
-{
-    "compileCommand": "g++ -c %(cpp)s",
-    "allowHeaderModification": true,
-    "includePaths": [
-        "."
-    ]
-}
