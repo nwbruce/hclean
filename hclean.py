@@ -36,12 +36,6 @@ class IncludeDirs:
 
 
 class IncludeRef:
-    lineno = 0
-    raw = ''
-    is_quotes = False
-    target = ''
-    is_sys = False
-    fullpath = ''
 
     def __init__(self, lineno: int, raw: str, inc_dirs: IncludeDirs):
         self.lineno = lineno
@@ -51,6 +45,8 @@ class IncludeRef:
             self.target = m.group(2)
             self.is_quotes = m.group(1) == '"'
             self.is_sys, self.fullpath = inc_dirs.locate(self.target)
+        else:
+            raise Exception('Failed to match regex for include on |%s|' % str(raw))
     
     def __repr__(self):
         lstyle = '"' if self.is_quotes else '<'
@@ -59,10 +55,11 @@ class IncludeRef:
 
 
 class HCFile:
-    fullpath = ''
-    includes = []
-    modifiable = False
-    removed_includes = []
+    def __init__(self):
+        self.fullpath = ''
+        self.includes = []
+        self.modifiable = False
+        self.removed_includes = []
 
     def __repr__(self):
         return 'F=' + self.fullpath + \
