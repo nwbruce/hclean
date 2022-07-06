@@ -129,9 +129,15 @@ async def fix_includes_batch(graph: dict, batch: set, jobs: int):
 async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue):
     while not q.empty():
         file = await q.get()
-        # todo
         hcfile = graph[file]
-        print(hcfile)
+        # todo
+        print(hcfile, '\n')
+        """
+            - do a test compile
+            - for each include in this file, add all the lines in file.h.rem for that include here. shorten the path based on -I
+            - remove each include and try to compile each time
+            - store successfully removed files in file.h.rem
+        """
 
 
 def pop_ready(graph: dict, ordered_file_list: list):
@@ -199,8 +205,6 @@ async def scan_for_includes_worker(q: asyncio.Queue, inc_dirs: IncludeDirs):
         result = HCFile()
         result.fullpath = fpath
         result.modifiable = True
-        result.includes = []
-        result.removed_includes = []
         LOGGER.debug(f'Scanning {fpath}')
         with open(fpath, 'r') as fd:
             for i, line in enumerate(fd):
