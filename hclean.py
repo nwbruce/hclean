@@ -102,14 +102,53 @@ async def main():
 
         LOGGER.info('Determining visitation order')
         ordered_file_list = topological_sort(graph)
-        LOGGER.info('Visitation order: %s', str([f for f in ordered_file_list]))
+
+        LOGGER.info('Fixing files in order: %s', ', '.join(ordered_file_list))
+        await fix_includes(graph, ordered_file_list, args.jobs)
 
     except Exception as e:
         LOGGER.exception(e)
         print('ERROR:', e)
         exit(1)
 
+#### fix includes ####
 
+async def fix_includes(graph: dict, ordered_file_list: list, jobs: int):
+    while True:
+        batch = pop_ready(graph, ordered_file_list)
+        if batch:
+            LOGGER.info('Fixing includes in batch: %s', str(batch))
+            await fix_includes_batch(graph, batch, jobs)
+        else:
+            break
+
+async def fix_includes_batch(graph: dict, batch: set, jobs: int):
+    q = asyncio.Queue()
+    for file in batch:
+        q.put_nowait(file)
+    tasks = [asyncio.create_task(fix_includes_batch_worker(graph, q)) for _ in range(jobs)]
+    return await asyncio.gather(*tasks)
+
+async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue):
+    while not q.empty():
+        file = await q.get()
+        # todo
+        hcfile = graph[file]
+        print(hcfile)
+
+
+def pop_ready(graph: dict, ordered_file_list: list):
+    result = set()
+    while len(ordered_file_list):
+        candidate = ordered_file_list[0]
+        hcfile = graph[candidate]
+        for inc in hcfile.includes:
+            # if this one depends on something in the result set, exit
+            if inc.fullpath in result:
+                return result
+        result.add(candidate)
+        ordered_file_list.pop(0)
+    return result
 
 
 #### build file graph ####
@@ -147,38 +186,34 @@ def flatten_list_of_dicts(lod: list):
 
 
 async def scan_for_includes(cppfiles: list, inc_dirs: IncludeDirs, jobs: int):
-    async def _worker(q: asyncio.Queue):
-        try:
-            results = {}
-            while not q.empty():
-                fpath = await q.get()
-                fpath = os.path.abspath(fpath)
-                result = HCFile()
-                result.fullpath = fpath
-                result.modifiable = True
-                LOGGER.debug(f'Scanning {fpath}')
-                with open(fpath, 'r') as fd:
-                    for i, line in enumerate(fd):
-                        if line.startswith('#include'):
-                            incref = IncludeRef(i+1, line, inc_dirs)
-                            LOGGER.debug(f'Include found in {fpath}: {incref}')
-                            result.includes.append(incref)
-                LOGGER.info(f'Found {len(result.includes)} include(s) in {fpath}')
-                results[fpath] = result
-            return results
-        except Exception as e:
-            LOGGER.exception(e)
-            print('ERROR:', e)
-            exit(1)
-    ### end worker
     q = asyncio.Queue()
     for file in cppfiles:
         q.put_nowait(file)
-    tasks = [asyncio.create_task(_worker(q)) for _ in range(jobs)]
-    worker_results = await asyncio.gather(*tasks, return_exceptions=True)
+    tasks = [asyncio.create_task(scan_for_includes_worker(q, inc_dirs)) for _ in range(jobs)]
+    worker_results = await asyncio.gather(*tasks)
     return flatten_list_of_dicts(worker_results)
 
 
+async def scan_for_includes_worker(q: asyncio.Queue, inc_dirs: IncludeDirs):
+    results = {}
+    while not q.empty():
+        fpath = await q.get()
+        fpath = os.path.abspath(fpath)
+        result = HCFile()
+        result.fullpath = fpath
+        result.modifiable = True
+        result.includes = []
+        result.removed_includes = []
+        LOGGER.debug(f'Scanning {fpath}')
+        with open(fpath, 'r') as fd:
+            for i, line in enumerate(fd):
+                if line.startswith('#include'):
+                    incref = IncludeRef(i+1, line, inc_dirs)
+                    LOGGER.debug(f'Include found in {fpath}: {incref}')
+                    result.includes.append(incref)
+        LOGGER.info(f'Found {len(result.includes)} include(s) in {fpath}')
+        results[fpath] = result
+    return results
 
 #### topological sort ####
 
@@ -187,7 +222,7 @@ def topological_sort(graph):
     result = []
     for vertex in graph:
         topo_visit(graph, vertex, visited, result)
-    return reversed(result)
+    return [x for x in reversed(result)]
 
 def topo_visit(graph: dict, vertex: str, visited: set, result: list):
     if vertex in visited:
