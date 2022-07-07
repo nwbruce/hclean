@@ -69,17 +69,6 @@ class HCFile:
             ' R=' + str(self.removed_includes)
 
 
-
-"""
-- scan all headers in -I directories and all cpp's listed and create a graph of includes (with full file paths based on -I). note which headers can be modified (e.g. not std lib)
-- topological sort
-- for each file, starting with top level header in topological order
-    - do a test compile
-    - for each include in this file, add all the lines in file.h.rem for that include here. shorten the path based on -I
-    - remove each include and try to compile each time
-    - store successfully removed files in file.h.rem
-"""
-
 async def main():
     parser = argparse.ArgumentParser(description="Cleanup unused includes", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-c', dest='command', required=True, help='Compile command to run with {0} interpolated with target file')
@@ -134,13 +123,6 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
     while not q.empty():
         file = await q.get()
         hcfile = graph[file]
-        # todo
-        """
-            - do a test compile
-            - for each include in this file, add all the lines in file.h.rem for that include here. shorten the path based on -I
-            - remove each include and try to compile each time
-            - store successfully removed files in file.h.rem
-        """
         orig = hcfile.fullpath
         LOGGER.debug(f'Starting test compile of {orig}')
         errmsg = await try_compile(command, orig)
