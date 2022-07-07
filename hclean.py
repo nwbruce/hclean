@@ -6,7 +6,7 @@ import logging
 import asyncio
 import re
 import os
-import shutil
+import copy
 
 LOGGER = logging.getLogger(__file__)
 
@@ -150,11 +150,11 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
         # add files removed from parents
         inherited = find_inherited_headers(graph, hcfile)
         if inherited:
-            insert_after_line = hcfile.includes[-1].lineno if hcfile.includes else None
+            insert_after_line = hcfile.includes[-1].lineno if hcfile.includes else 0
             def line_modifier(lineno, line):
                 if lineno == insert_after_line:
                     return line + ''.join([inc.raw for inc in inherited])
-                elif insert_after_line is None and lineno == 1:
+                elif insert_after_line == 0 and lineno == 1:
                     return ''.join([inc.raw for inc in inherited]) + line
                 else:
                     return line
@@ -162,11 +162,15 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
             os.rename(orig, bak)
             await edit_file(bak, orig, line_modifier)
             os.remove(bak)
-            hcfile.includes.extend(inherited)
+            for i, inc in enumerate(inherited):
+                inc_copy = copy.deepcopy(inc)
+                inc_copy.lineno = insert_after_line + i + 1
+                hcfile.includes.append(inc_copy)
             
 
         # compile without each header
         for hdr in reversed(hcfile.includes):
+            print(hcfile.fullpath, hdr.fullpath)
             def line_modifier(lineno, line):
                 if lineno == hdr.lineno:
                     return '// ' + line
