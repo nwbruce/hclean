@@ -141,24 +141,27 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
             - remove each include and try to compile each time
             - store successfully removed files in file.h.rem
         """
-        LOGGER.debug(f'Starting test compile of {hcfile.fullpath}')
-        errmsg = await try_compile(command, hcfile.fullpath)
+        orig = hcfile.fullpath
+        LOGGER.debug(f'Starting test compile of {orig}')
+        errmsg = await try_compile(command, orig)
         if errmsg:
-            raise Exception(f'Failed to do a simple compile of {hcfile.fullpath}:\n{errmsg}')
+            raise Exception(f'Failed to do a simple compile of {orig}:\n{errmsg}')
 
         for hdr in hcfile.includes:
-            bak = hcfile.fullpath + '.bak'
+            bak = orig + '.bak'
             def modify_line(lineno, line):
                 if lineno == hdr.lineno:
                     return '// ' + line
                 return line
-            await edit_file_with_backup(hcfile.fullpath, bak, modify_line)
-            errmsg = await try_compile(command, hcfile.fullpath)
+            await edit_file_with_backup(orig, bak, modify_line)
+            errmsg = await try_compile(command, orig)
             if errmsg:
-                os.remove(hcfile.fullpath)
-                os.rename(bak, hcfile.fullpath)
+                # undo
+                os.remove(orig)
+                os.rename(bak, orig)
             else:
                 os.remove(bak)
+                hcfile.removed_includes.append(hdr)
 
 
 async def try_compile(command: str, fpath: str):
