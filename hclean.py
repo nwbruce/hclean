@@ -162,6 +162,8 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
         # os.rename(orig, bak)
         # await edit_file(bak, orig, line_modifier)
         # os.remove(bak)
+        print(find_inherited_headers(graph, hcfile))
+        print()
 
         # compile without each header
         for hdr in reversed(hcfile.includes):
@@ -182,6 +184,18 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
                 os.remove(bak)
                 hcfile.removed_includes.append(hdr)
 
+def find_inherited_headers(graph: dict, hcfile: HCFile):
+    results = {}
+    for incref in hcfile.includes:
+        hdr = graph[incref.fullpath]
+        for removed in hdr.removed_includes:
+            results[removed.fullpath] = removed
+    print(results)
+    for incref in hcfile.includes:
+        if incref.fullpath in results:
+            del results[incref.fullpath]
+    print(results)
+    return [i for i in results.items()]
 
 async def try_compile(command: str, fpath: str):
     cmd = command.format(fpath)

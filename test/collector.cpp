@@ -1,5 +1,4 @@
 #include <collector.h>
-#include <unordered_map>
 #include <climits>
 #include <map>
 
