@@ -1,9 +1,9 @@
 
 CC=g++ -c -x c++-header -I test/ -o /dev/null
 
-build:
+run:
 	rm -f log.txt
-	./hclean.py -j 8 \
+	time ./hclean.py -j 8 \
 		-c "$(CC) {}" \
 		-l log.txt \
 		-I test/ \
@@ -19,6 +19,9 @@ cc:
 	$(CC) test/collector_util.h
 	$(CC) test/collector.cpp
 	$(CC) test/main.cpp
+
+reset:
+	git checkout -- test/
 
 #	$(eval TEMPF:=$(shell /usr/bin/mktemp).cpp)
 #	cp testfile.cpp $(TEMPF)
