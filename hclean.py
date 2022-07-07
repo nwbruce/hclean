@@ -150,11 +150,11 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
         # add files removed from parents
         inherited = find_inherited_headers(graph, hcfile)
         if inherited:
-            insert_after_line = hcfile.includes[-1].lineno if hcfile.includes else 0
+            insert_after_line = hcfile.includes[-1].lineno if hcfile.includes else None
             def line_modifier(lineno, line):
-                if insert_after_line and lineno == insert_after_line:
+                if lineno == insert_after_line:
                     return line + ''.join([inc.raw for inc in inherited])
-                elif insert_after_line == 0 and lineno == 1:
+                elif insert_after_line is None and lineno == 1:
                     return ''.join([inc.raw for inc in inherited]) + line
                 else:
                     return line
