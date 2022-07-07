@@ -162,6 +162,7 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
             os.rename(orig, bak)
             await edit_file(bak, orig, line_modifier)
             os.remove(bak)
+            hcfile.includes.extend(inherited)
             
 
         # compile without each header
