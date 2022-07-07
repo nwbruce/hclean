@@ -192,7 +192,7 @@ def find_inherited_headers(graph: dict, hcfile: HCFile):
     for incref in hcfile.includes:
         if incref.fullpath in results:
             del results[incref.fullpath]
-    return [i for i in results.items()]
+    return [i for _, i in results.items()]
 
 async def try_compile(command: str, fpath: str):
     cmd = command.format(fpath)
