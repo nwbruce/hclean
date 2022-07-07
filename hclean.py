@@ -149,17 +149,19 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
 
         for hdr in hcfile.includes:
             bak = orig + '.bak'
-            def modify_line(lineno, line):
+            def line_modifier(lineno, line):
                 if lineno == hdr.lineno:
                     return '// ' + line
                 return line
-            await edit_file_with_backup(orig, bak, modify_line)
+            os.rename(orig, bak)
+            await edit_file(bak, orig, line_modifier)
             errmsg = await try_compile(command, orig)
             if errmsg:
                 # undo
                 os.remove(orig)
                 os.rename(bak, orig)
             else:
+                # commit
                 os.remove(bak)
                 hcfile.removed_includes.append(hdr)
 
@@ -177,14 +179,13 @@ async def try_compile(command: str, fpath: str):
     else:
         return None
 
-async def edit_file_with_backup(fpath: str, bakpath: str, modify_line):
-    os.rename(fpath, bakpath)
-    with open(bakpath, 'r') as fdin:
-        with open(fpath, 'w') as fdout:
+async def edit_file(fromfile: str, tofile: str, line_modifier):
+    with open(fromfile, 'r') as fdin:
+        with open(tofile, 'w') as fdout:
             for i, line in enumerate(fdin):
-                line = modify_line(i+1, line)
+                line = line_modifier(i+1, line)
                 fdout.write(line)
-    return bakpath
+    return fromfile
 
 def pop_ready(graph: dict, ordered_file_list: list):
     result = set()
