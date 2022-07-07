@@ -174,7 +174,7 @@ async def try_compile(command: str, fpath: str):
     else:
         return None
 
-async def edit_file_with_backup(fpath: str, bakpath: str, modify_line: function):
+async def edit_file_with_backup(fpath: str, bakpath: str, modify_line):
     os.rename(fpath, bakpath)
     with open(bakpath, 'r') as fdin:
         with open(fpath, 'w') as fdout:
