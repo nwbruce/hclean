@@ -6,6 +6,7 @@ import logging
 import asyncio
 import re
 import os
+import shutil
 
 LOGGER = logging.getLogger(__file__)
 
@@ -81,18 +82,21 @@ class HCFile:
 
 async def main():
     parser = argparse.ArgumentParser(description="Cleanup unused includes", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--log', default="./log.txt", help='Path to write log file')
-    parser.add_argument('-j', '--jobs', default=multiprocessing.cpu_count(), type=int, help='Max number of parallel jobs to run')
-    parser.add_argument('-I', action='append', default=[], help='Additional include directory')
-    parser.add_argument('-isystem', action='append', default=[], help='Additional system include directory')
+    parser.add_argument('-c', dest='command', required=True, help='Compile command to run with {0} interpolated with target file')
+    parser.add_argument('-l', dest='logpath', help='Path to write log file')
+    parser.add_argument('-j', dest='jobs', default=multiprocessing.cpu_count(), type=int, help='Max number of parallel jobs to run')
+    parser.add_argument('-I', dest='incdir', action='append', default=[], help='Additional include directories')
+    parser.add_argument('-S', dest='sysdir', action='append', default=[], help='Additional system include directories')
     parser.add_argument('cppfile', nargs='+', help='C++ files to modify')
     args = parser.parse_args()
 
-    logging.basicConfig(filename=args.log, level=logging.DEBUG)
-    LOGGER.info('dir=%s args=%s', os.getcwd(), str(args))
+    if args.logpath:
+        logging.basicConfig(filename=args.logpath, level=logging.DEBUG)
+
+    LOGGER.info('pwd=%s args=%s', os.getcwd(), str(args))
 
     try:
-        inc_dirs = IncludeDirs(args.I, args.isystem)
+        inc_dirs = IncludeDirs(args.incdir, args.sysdir)
 
         LOGGER.info('Scanning files to build include graph')
         graph = await build_file_graph(inc_dirs, args.cppfile, args.jobs)
@@ -101,7 +105,7 @@ async def main():
         ordered_file_list = topological_sort(graph)
 
         LOGGER.info('Fixing files in order: %s', ', '.join(ordered_file_list))
-        await fix_includes(graph, ordered_file_list, args.jobs)
+        await fix_includes(graph, ordered_file_list, args.command, args.jobs)
 
     except Exception as e:
         LOGGER.exception(e)
@@ -110,35 +114,74 @@ async def main():
 
 #### fix includes ####
 
-async def fix_includes(graph: dict, ordered_file_list: list, jobs: int):
+async def fix_includes(graph: dict, ordered_file_list: list, command: str, jobs: int):
     while True:
         batch = pop_ready(graph, ordered_file_list)
         if batch:
             LOGGER.info('Fixing includes in batch: %s', str(batch))
-            await fix_includes_batch(graph, batch, jobs)
+            await fix_includes_batch(graph, batch, command, jobs)
         else:
             break
 
-async def fix_includes_batch(graph: dict, batch: set, jobs: int):
+async def fix_includes_batch(graph: dict, batch: set, command: str, jobs: int):
     q = asyncio.Queue()
     for file in batch:
         q.put_nowait(file)
-    tasks = [asyncio.create_task(fix_includes_batch_worker(graph, q)) for _ in range(jobs)]
+    tasks = [asyncio.create_task(fix_includes_batch_worker(graph, q, command)) for _ in range(jobs)]
     return await asyncio.gather(*tasks)
 
-async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue):
+async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str):
     while not q.empty():
         file = await q.get()
         hcfile = graph[file]
         # todo
-        print(hcfile, '\n')
         """
             - do a test compile
             - for each include in this file, add all the lines in file.h.rem for that include here. shorten the path based on -I
             - remove each include and try to compile each time
             - store successfully removed files in file.h.rem
         """
+        LOGGER.debug(f'Starting test compile of {hcfile.fullpath}')
+        errmsg = await try_compile(command, hcfile.fullpath)
+        if errmsg:
+            raise Exception(f'Failed to do a simple compile of {hcfile.fullpath}:\n{errmsg}')
 
+        for hdr in hcfile.includes:
+            bak = hcfile.fullpath + '.bak'
+            def modify_line(lineno, line):
+                if lineno == hdr.lineno:
+                    return '// ' + line
+                return line
+            await edit_file_with_backup(hcfile.fullpath, bak, modify_line)
+            errmsg = await try_compile(command, hcfile.fullpath)
+            if errmsg:
+                os.remove(hcfile.fullpath)
+                os.rename(bak, hcfile.fullpath)
+            else:
+                os.remove(bak)
+
+
+async def try_compile(command: str, fpath: str):
+    cmd = command.format(fpath)
+    LOGGER.debug(f'Running [{cmd}]')
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT)
+    stdout, _ = await proc.communicate()
+    if proc.returncode != 0:
+        return stdout.decode()
+    else:
+        return None
+
+async def edit_file_with_backup(fpath: str, bakpath: str, modify_line: function):
+    os.rename(fpath, bakpath)
+    with open(bakpath, 'r') as fdin:
+        with open(fpath, 'w') as fdout:
+            for i, line in enumerate(fdin):
+                line = modify_line(i+1, line)
+                fdout.write(line)
+    return bakpath
 
 def pop_ready(graph: dict, ordered_file_list: list):
     result = set()
