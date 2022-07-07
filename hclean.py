@@ -168,7 +168,6 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
 
         # compile without each header
         for hdr in reversed(hcfile.includes):
-            print(hcfile.fullpath, hdr.fullpath)
             def line_modifier(lineno, line):
                 if lineno == hdr.lineno:
                     return '// ' + line
