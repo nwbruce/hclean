@@ -1,8 +1,10 @@
 #ifndef COLLECTOR_H_
 #define COLLECTOR_H_
 
+#include <unordered_map>
 #include <list>
 #include <climits>
+#include <map>
 
 struct Collector {
   Collector();
