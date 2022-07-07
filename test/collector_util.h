@@ -1,5 +1,8 @@
 
 #include <collector.h>
+#include <unordered_map>
+#include <climits>
+#include <map>
 
 template <typename ITER>
 void push_all(Collector& c, ITER start, ITER end) {

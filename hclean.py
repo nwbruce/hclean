@@ -147,12 +147,31 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
         if errmsg:
             raise Exception(f'Failed to do a simple compile of {orig}:\n{errmsg}')
 
+        # add removed parent files
+        inherited = set()
         for hdr in hcfile.includes:
-            bak = orig + '.bak'
+            hdr_file = graph[hdr.fullpath]
+            for inc in hdr_file.removed_includes:
+                inherited.add(inc.raw)
+        print(orig, inherited)
+        def line_modifier(lineno, line):
+            if len(hcfile.includes) == 0 and lineno == 0:
+                return ''.join(inherited) + line
+            elif len(hcfile.includes) > 0 and lineno == hcfile.includes[-1].lineno:
+                return line + ''.join(inherited)
+            return line
+        bak = orig + '.bak'
+        os.rename(orig, bak)
+        await edit_file(bak, orig, line_modifier)
+        os.remove(bak)
+
+        # compile without each header
+        for hdr in reversed(hcfile.includes):
             def line_modifier(lineno, line):
                 if lineno == hdr.lineno:
                     return '// ' + line
                 return line
+            bak = orig + '.bak'
             os.rename(orig, bak)
             await edit_file(bak, orig, line_modifier)
             errmsg = await try_compile(command, orig)

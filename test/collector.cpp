@@ -1,4 +1,7 @@
 #include <collector.h>
+#include <unordered_map>
+#include <climits>
+#include <map>
 
 Collector::Collector() : _sum(0.0) {}
 
