@@ -154,8 +154,6 @@ async def fix_includes_batch_worker(graph: dict, q: asyncio.Queue, command: str)
             def line_modifier(lineno, line):
                 if lineno == insert_after_line:
                     return line + ''.join([inc.raw for inc in inherited])
-                elif insert_after_line == 0 and lineno == 1:
-                    return ''.join([inc.raw for inc in inherited]) + line
                 else:
                     return line
             bak = orig + '.bak'
@@ -215,6 +213,7 @@ async def try_compile(command: str, fpath: str):
 async def edit_file(fromfile: str, tofile: str, line_modifier):
     with open(fromfile, 'r') as fdin:
         with open(tofile, 'w') as fdout:
+            fdout.write(line_modifier(0, ''))
             for i, line in enumerate(fdin):
                 line = line_modifier(i+1, line)
                 fdout.write(line)
